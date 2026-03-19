@@ -1,0 +1,61 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Configuration
+local TOGGLE_KEY = Enum.KeyCode.E  -- Change this to Enum.KeyCode.F if preferred
+local active = false
+
+local function teleportToMeshes()
+    while active do
+        local character = player.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then 
+            task.wait(1) 
+            continue 
+        end
+
+        local targets = {}
+        
+        -- Get only items directly in Workspace that are Meshes/Parts
+        -- This ignores anything inside Folders or Models
+        for _, obj in ipairs(game.Workspace:GetChildren()) do
+            if obj:IsA("MeshPart") or obj:IsA("BasePart") then
+                table.insert(targets, obj)
+            end
+        end
+
+        if #targets == 0 then
+            print("No loose meshes found in Workspace.")
+            active = false
+            break
+        end
+
+        -- Loop through found targets
+        for _, target in ipairs(targets) do
+            if not active then break end
+            
+            if target:IsA("BasePart") then
+                character.HumanoidRootPart.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+                print("Teleported to: " .. target.Name)
+                task.wait(0.5) -- Delay between teleports to prevent crashing/kicking
+            end
+        end
+        
+        task.wait(1)
+    end
+end
+
+-- Keybind Listener
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == TOGGLE_KEY then
+        active = not active
+        if active then
+            print("Teleport Loop: STARTED")
+            teleportToMeshes()
+        else
+            print("Teleport Loop: STOPPED")
+        end
+    end
+end)
