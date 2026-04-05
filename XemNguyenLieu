@@ -2,13 +2,13 @@ local Player = game.Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "X18_Scanner_UI"
+screenGui.Name = "Total_Scanner_UI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0, 300, 0, 40)
-statusLabel.Position = UDim2.new(0.5, -150, 0.05, 0)
+statusLabel.Size = UDim2.new(0, 350, 0, 45)
+statusLabel.Position = UDim2.new(0.5, -175, 0.05, 0)
 statusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 statusLabel.BackgroundTransparency = 0.6
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -20,14 +20,26 @@ statusLabel.Parent = screenGui
 local targetItems = {
     ["X-18 Batteries"] = true,
     ["X-18 Cube"] = true,
-    ["X-18 Mask"] = true
+    ["X-18 Mask"] = true,
+    ["Memory Piece #1"] = true,
+    ["Memory Piece #2"] = true,
+    ["Memory Piece #3"] = true,
+    ["Memory Piece #4"] = true,
+    ["Memory Piece #5"] = true,
+    ["Memory Piece #6"] = true,
+    ["Memory Piece #7"] = true,
+    ["Memory Piece #8"] = true,
+    ["Professor's Monitor"] = true,
+    ["Broken Tracking Device"] = true
 }
 
 local function scanItems()
     local foundList = {}
     for _, v in pairs(workspace:GetDescendants()) do
         if targetItems[v.Name] then
-            table.insert(foundList, v.Name)
+            if not table.find(foundList, v.Name) then
+                table.insert(foundList, v.Name)
+            end
             if not v:FindFirstChild("ItemHighlight") then
                 local highlight = Instance.new("Highlight")
                 highlight.Name = "ItemHighlight"
@@ -45,7 +57,7 @@ task.spawn(function()
         local items = scanItems()
         if #items > 0 then
             statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-            statusLabel.Text = "FOUND: " .. table.concat(items, ", ")
+            statusLabel.Text = "FOUND: " .. table.concat(items, " | ")
         else
             statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
             statusLabel.Text = "Vat pham chua spawn..."
