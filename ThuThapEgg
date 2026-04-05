@@ -1,0 +1,35 @@
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+local cacheFolder = game.Workspace:FindFirstChild("Cache")
+
+-- Biến để bật/tắt script (đổi thành false nếu muốn dừng)
+_G.AutoBringEggs = true 
+
+print("Bắt đầu tự động gom Egg...")
+
+while _G.AutoBringEggs do
+    if cacheFolder then
+        -- Lấy danh sách tất cả vật phẩm trong folder Cache
+        local items = cacheFolder:GetChildren()
+        
+        for _, item in pairs(items) do
+            if item.Name == "Egg" then
+                -- Di chuyển Egg tới vị trí nhân vật (cách 2 studs phía trước để không bị kẹt)
+                local targetPos = humanoidRootPart.CFrame * CFrame.new(0, 0, -2)
+                
+                if item:IsA("BasePart") then
+                    item.CFrame = targetPos
+                elseif item:IsA("Model") then
+                    -- Nếu là Model thì dùng SetPrimaryPartCFrame hoặc PivotTo
+                    item:PivotTo(targetPos)
+                end
+            end
+        end
+    end
+    
+    -- Nghỉ 0.5 giây trước khi quét lại (có thể chỉnh thấp xuống 0.1 nếu muốn nhanh hơn)
+    task.wait(0.5) 
+end
+ 
