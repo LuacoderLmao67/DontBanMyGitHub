@@ -1,0 +1,54 @@
+local Player = game.Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "X18_Scanner_UI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0, 300, 0, 40)
+statusLabel.Position = UDim2.new(0.5, -150, 0.05, 0)
+statusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+statusLabel.BackgroundTransparency = 0.6
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.Text = "Starting Scanner..."
+statusLabel.Parent = screenGui
+
+local targetItems = {
+    ["X-18 Batteries"] = true,
+    ["X-18 Cube"] = true,
+    ["X-18 Mask"] = true
+}
+
+local function scanItems()
+    local foundList = {}
+    for _, v in pairs(workspace:GetDescendants()) do
+        if targetItems[v.Name] then
+            table.insert(foundList, v.Name)
+            if not v:FindFirstChild("ItemHighlight") then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "ItemHighlight"
+                highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = v
+            end
+        end
+    end
+    return foundList
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        local items = scanItems()
+        if #items > 0 then
+            statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            statusLabel.Text = "FOUND: " .. table.concat(items, ", ")
+        else
+            statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            statusLabel.Text = "Vat pham chua spawn..."
+        end
+    end
+end)
