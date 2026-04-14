@@ -14,26 +14,38 @@ statusLabel.BackgroundTransparency = 0.6
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.GothamBold
-statusLabel.Text = "Scanning..."
+statusLabel.Text = "Starting Scanner..."
 statusLabel.Parent = screenGui
 
-local keywords = {"X-18", "Memory", "Monitor", "Tracking", "Piece"}
+local targetNames = {
+    ["X-18 Batteries"] = true, ["X-18 Cube"] = true, ["X-18 Mask"] = true,
+    ["Memory Piece #1"] = true, ["Memory Piece #2"] = true, ["Memory Piece #3"] = true,
+    ["Memory Piece #4"] = true, ["Memory Piece #5"] = true, ["Memory Piece #6"] = true,
+    ["Memory Piece #7"] = true, ["Memory Piece #8"] = true,
+    ["Professor's Monitor"] = true, ["Broken Tracking Device"] = true
+}
+
+local function applyEffect(v, list)
+    if not table.find(list, v.Name) then
+        table.insert(list, v.Name)
+    end
+    if not v:FindFirstChild("ItemHighlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ItemHighlight"
+        highlight.FillColor = Color3.fromRGB(0, 255, 0)
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = v
+    end
+end
 
 local function scanItems()
     local foundList = {}
     for _, v in pairs(workspace:GetDescendants()) do
-        for _, key in pairs(keywords) do
-            if string.find(v.Name, key) then
-                if not table.find(foundList, v.Name) then
-                    table.insert(foundList, v.Name)
-                end
-                if not v:FindFirstChild("ItemHighlight") then
-                    local highlight = Instance.new("Highlight")
-                    highlight.Name = "ItemHighlight"
-                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
-                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    highlight.Parent = v
-                end
+        if targetNames[v.Name] then
+            applyEffect(v, foundList)
+        elseif v:IsA("MeshPart") or v:IsA("SpecialMesh") then
+            if targetNames[v.Parent.Name] then 
+                applyEffect(v.Parent, foundList)
             end
         end
     end
