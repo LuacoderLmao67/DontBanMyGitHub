@@ -7,14 +7,17 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0, 300, 0, 40)
-statusLabel.Position = UDim2.new(1, -310, 0.02, 0)
+-- Tăng kích thước rộng ra (400) và cao hơn (200) để chứa được nhiều dòng
+statusLabel.Size = UDim2.new(0, 400, 0, 200)
+statusLabel.Position = UDim2.new(1, -410, 0.02, 0)
 statusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 statusLabel.BackgroundTransparency = 0.6
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.TextScaled = true
+statusLabel.TextSize = 18 -- Cố định cỡ chữ để không bị quá to/nhỏ
 statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextXAlignment = Enum.TextXAlignment.Right
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left -- Căn lề trái cho giống danh sách
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top -- Đẩy chữ lên trên cùng
+statusLabel.TextWrapped = true -- Tự động xuống dòng nếu tên quá dài
 statusLabel.Text = "Waiting for Spawn..."
 statusLabel.Parent = screenGui
 
@@ -23,10 +26,16 @@ local keywords = {"x-18", "memo", "prof", "moni", "brok"}
 local function scan()
     local found = {}
     for _, v in pairs(workspace:GetChildren()) do
+        if v:IsA("Part") and v.ClassName == "Part" then 
+            continue 
+        end
+
         local nameLower = string.lower(v.Name)
         for _, key in pairs(keywords) do
             if string.find(nameLower, key) then
-                if not table.find(found, v.Name) then table.insert(found, v.Name) end
+                if not table.find(found, v.Name) then 
+                    table.insert(found, v.Name) 
+                end
                 if not v:FindFirstChild("ItemHighlight") then
                     local h = Instance.new("Highlight")
                     h.Name = "ItemHighlight"
@@ -46,7 +55,12 @@ task.spawn(function()
         local items = scan()
         if #items > 0 then
             statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-            statusLabel.Text = "FOUND: " .. table.concat(items, " | ")
+            -- Tạo danh sách theo dòng: Line 1: Tên đồ
+            local displayText = ""
+            for i, name in ipairs(items) do
+                displayText = displayText .. "Line " .. i .. ": " .. name .. "\n"
+            end
+            statusLabel.Text = displayText
         else
             statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
             statusLabel.Text = "Vat pham chua spawn..."
