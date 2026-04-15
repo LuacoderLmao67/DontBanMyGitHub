@@ -7,58 +7,43 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0, 350, 0, 45)
-statusLabel.Position = UDim2.new(0.5, -175, 0.05, 0)
+statusLabel.Size = UDim2.new(0, 300, 0, 40)
+statusLabel.Position = UDim2.new(1, -310, 0.02, 0)
 statusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 statusLabel.BackgroundTransparency = 0.6
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextXAlignment = Enum.TextXAlignment.Right
 statusLabel.Text = "Waiting for Spawn..."
 statusLabel.Parent = screenGui
 
-local targetNames = {
-    "X-18", 
-    "Memory Piece", 
-    "Professor's Monitor", 
-    "Broken Tracking Device"
-}
+local keywords = {"x-18", "memo", "prof", "moni", "brok"}
 
-local function scanWorkspace()
-    local foundList = {}
-    
+local function scan()
+    local found = {}
     for _, v in pairs(workspace:GetChildren()) do
-        local isTarget = false
-        local matchedName = ""
-
-        for _, target in pairs(targetNames) do
-            if string.sub(v.Name, 1, string.len(target)) == target then
-                isTarget = true
-                matchedName = v.Name
+        local nameLower = string.lower(v.Name)
+        for _, key in pairs(keywords) do
+            if string.find(nameLower, key) then
+                if not table.find(found, v.Name) then table.insert(found, v.Name) end
+                if not v:FindFirstChild("ItemHighlight") then
+                    local h = Instance.new("Highlight")
+                    h.Name = "ItemHighlight"
+                    h.FillColor = Color3.fromRGB(0, 255, 0)
+                    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    h.Parent = v
+                end
                 break
             end
         end
-
-        if isTarget then
-            if not table.find(foundList, matchedName) then
-                table.insert(foundList, matchedName)
-            end
-            
-            if not v:FindFirstChild("ItemHighlight") then
-                local highlight = Instance.new("Highlight")
-                highlight.Name = "ItemHighlight"
-                highlight.FillColor = Color3.fromRGB(0, 255, 0)
-                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                highlight.Parent = v
-            end
-        end
     end
-    return foundList
+    return found
 end
 
 task.spawn(function()
     while task.wait(0.5) do
-        local items = scanWorkspace()
+        local items = scan()
         if #items > 0 then
             statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
             statusLabel.Text = "FOUND: " .. table.concat(items, " | ")
