@@ -643,7 +643,7 @@ do
         tw(wH,TW.wave,{Rotation=18}); task.delay(0.48,function()
         tw(wH,TW.wave,{Rotation=0}); task.delay(3.2,waveLoop) end) end) end)
     end
-    greetDismissed=true
+    greetDismissed=false
     greetCard.InputBegan:Connect(function(inp)
         if inp.UserInputType==Enum.UserInputType.MouseButton1 and not greetDismissed then
             greetDismissed=true; burst(greetCard,8,C.accent)
