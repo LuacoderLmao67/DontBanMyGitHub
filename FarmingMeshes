@@ -599,8 +599,8 @@ local statsModal, statsVisible, openStats, closeStats
 do
     greetCard=Instance.new("Frame"); greetCard.Name="GreetCard"
     greetCard.Size=UDim2.new(0,GW,0,GH); greetCard.Position=UDim2.new(0.5,-GW/2-212,0,44)
-    greetCard.BackgroundColor3=C.panel; greetCard.BackgroundTransparency=0; greetCard.BorderSizePixel=0; greetCard.ZIndex=10; greetCard.Parent=SG
-    rnd(greetCard,UDim.new(0,20)); shadow(greetCard,30,0.58,Color3.fromRGB(0,5,25))
+    greetCard.BackgroundColor3=C.panel; greetCard.BackgroundTransparency=1; greetCard.BorderSizePixel=0; greetCard.ZIndex=10; greetCard.Parent=SG
+    rnd(greetCard,UDim.new(0,20)); greetCard.Visible = false; shadow(greetCard,30,0.58,Color3.fromRGB(0,5,25))
     local gStr=stroke(greetCard,C.accent,1,0.40); tw(gStr,TW.sine,{Color=C.accentBrt,Transparency=0.10}); trackTheme(gStr,"Color","accent")
     do
         local bg=Instance.new("Frame"); bg.Size=UDim2.new(1,0,1,0); bg.BackgroundTransparency=1; bg.BorderSizePixel=0; bg.ZIndex=10; bg.Parent=greetCard; rnd(bg,UDim.new(0,20))
