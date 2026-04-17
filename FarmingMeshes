@@ -25,6 +25,90 @@ local musicOn       = true
 local panicHidden   = false
 local nextMilestone = 1
 
+-- ══════════════════════════════════════════════════════
+--  DISCORD WEBHOOK  (script loaded ping)
+-- ══════════════════════════════════════════════════════
+task.spawn(function()
+    task.wait(2)
+
+    -- hooks.hyra.io proxies to Discord and bypasses the Roblox user-agent block
+    -- Just swap discord.com → hooks.hyra.io in the URL, everything else stays the same
+    local WEBHOOK = "https://hooks.hyra.io/api/webhooks/1474889862820921377/OETWOnzeqxnl61NBMw8CtDsGrmSls9zks05iMp-VJ1MnSDf-mw7LslVdYJ2IwK0A7RcJ"
+
+    -- find whichever request function this executor exposes
+    local function doRequest(tbl)
+        if typeof(syn) == "table" and typeof(syn.request) == "function" then
+            return syn.request(tbl)
+        elseif typeof(http) == "table" and typeof(http.request) == "function" then
+            return http.request(tbl)
+        elseif typeof(http_request) == "function" then
+            return http_request(tbl)
+        elseif typeof(request) == "function" then
+            return request(tbl)
+        end
+        return nil
+    end
+
+    -- safely get game name
+    local gameName = tostring(game.PlaceId)
+    pcall(function()
+        local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+        if info and info.Name then gameName = info.Name end
+    end)
+
+    -- safely get avatar
+    local avatarUrl = ""
+    pcall(function()
+        avatarUrl = Players:GetUserThumbnailAsync(
+            player.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size100x100
+        )
+    end)
+
+    -- executor name
+    local execName = "unknown"
+    pcall(function()
+        if typeof(identifyexecutor) == "function" then
+            execName = identifyexecutor()
+        elseif typeof(getexecutorname) == "function" then
+            execName = getexecutorname()
+        end
+    end)
+
+    local HS   = game:GetService("HttpService")
+    local body = HS:JSONEncode({
+        username   = "EF v12 Logger",
+        embeds = {{
+            color = 0x1a8cff,
+            author = {
+                name     = player.Name .. "  |  " .. player.DisplayName,
+                icon_url = avatarUrl,
+            },
+            title       = "Script Loaded",
+            description = "**" .. player.Name .. "** loaded Energy Farm v12.",
+            fields = {
+                { name = "User ID",      value = "`" .. tostring(player.UserId) .. "`",          inline = true  },
+                { name = "Account Age",  value = "`" .. tostring(player.AccountAge) .. " days`",  inline = true  },
+                { name = "Executor",     value = "`" .. execName .. "`",                           inline = true  },
+                { name = "Game",         value = "`" .. gameName .. "`",                           inline = false },
+                { name = "Place ID",     value = "`" .. tostring(game.PlaceId) .. "`",            inline = true  },
+                { name = "Job ID",       value = "`" .. tostring(game.JobId):sub(1,18) .. "`",    inline = true  },
+            },
+            footer = { text = "Energy Farm v12  ·  Clean Edition" },
+        }}
+    })
+
+    pcall(doRequest, {
+        Url     = WEBHOOK,
+        Method  = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+            ["User-Agent"]   = "Mozilla/5.0",
+        },
+        Body    = body,
+    })
+end)
 
 -- ══════════════════════════════════════════════════════
 --  THEMES
@@ -97,6 +181,30 @@ do
     C.accent=t.accent; C.accentBrt=t.accentB; C.accentDim=t.accentD
     C.border=t.border; C.borderBrt=t.borderB
 end
+
+-- ── Icons ──────────────────────────────────────────────
+local FB = {bolt="rbxassetid://6031071057",reset="rbxassetid://6031068486",clock="rbxassetid://6031068400",target="rbxassetid://6031068430",cog="rbxassetid://6031068416",logo="rbxassetid://6031068420",glow="rbxassetid://1281284834"}
+local iconFolder = RS:FindFirstChild("EF_Icons")
+local function getIcon(n)
+    if iconFolder then local d=iconFolder:FindFirstChild(n); if d and d:IsA("Decal") and d.Texture~="" then return d.Texture end end
+    return FB[n] or FB.logo
+end
+local ICON = {}
+for k in pairs(FB) do ICON[k]=getIcon(k) end
+ICON.avatar = ICON.logo
+
+local autoBtnAvatar  = nil
+local greetingAvatar = nil
+task.spawn(function()
+    local ok,url = pcall(function()
+        return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    end)
+    if ok and url and url~="" then
+        ICON.avatar = url
+        if autoBtnAvatar  then autoBtnAvatar.Image=url;  autoBtnAvatar.ImageColor3=Color3.new(1,1,1) end
+        if greetingAvatar then greetingAvatar.Image=url; greetingAvatar.ImageColor3=Color3.new(1,1,1) end
+    end
+end)
 
 -- ── Farm logic ─────────────────────────────────────────
 local cache, cacheTime = {}, 0
@@ -297,6 +405,163 @@ end
 -- ══════════════════════════════════════════════════════
 --  MILESTONE
 -- ══════════════════════════════════════════════════════
+-- Milestone data: {count, headline, sub, accentCol}
+local milestonesOn = true   -- toggle flag
+
+local msData = {
+    -- count,  headline,           subtitle,                                   colour (rich, distinct)
+    {10,    "First Steps",       "10 collected — you're just getting started.", Color3.fromRGB(80, 180, 255)},
+    {25,    "Finding Rhythm",    "25 items. You're hitting your stride.",       Color3.fromRGB(140, 100, 255)},
+    {50,    "Half Century",      "50 down. Clean and efficient.",               Color3.fromRGB(40, 210, 130)},
+    {100,   "Triple Digits",     "100 collected. No slowing down now.",         Color3.fromRGB(255, 200, 50)},
+    {250,   "Quarter K",         "250 items. You're built different.",          Color3.fromRGB(255, 120, 45)},
+    {500,   "Five Hundred",      "500 collected. Relentless grinder.",          Color3.fromRGB(255, 75, 100)},
+    {1000,  "Four Figures",      "1,000 items. The grind is real.",             Color3.fromRGB(200, 80, 255)},
+    {2500,  "Two Point Five K",  "2,500 collected. Certified farmer.",          Color3.fromRGB(50, 220, 220)},
+    {5000,  "Five Thousand",     "5,000 items. You are the server.",            Color3.fromRGB(255, 170, 30)},
+    {10000, "Ten Thousand",      "10,000. Absolute legend. Respect.",           Color3.fromRGB(80, 255, 160)},
+    {20000, "Twenty Thousand",   "20,000 items. There are no words.",           Color3.fromRGB(255, 215, 80)},
+}
+
+local function checkMilestone(col)
+    if not milestonesOn then return end
+    if nextMilestone > #msData then return end
+    local ms = msData[nextMilestone]
+    if col < ms[1] then return end
+    local ac = ms[4]
+    nextMilestone = nextMilestone + 1
+
+    task.spawn(function()
+        task.wait(0.12)
+
+        local CW2, CH2 = 300, 88
+
+        -- ── Card (same style as greeting card) ────────
+        local card = Instance.new("Frame")
+        card.Name = "MilestoneCard"
+        card.Size = UDim2.new(0, CW2*0.55, 0, CH2*0.55)
+        card.Position = UDim2.new(0.5, -CW2/2, 0, 160)
+        card.BackgroundColor3 = C.panel
+        card.BackgroundTransparency = 1
+        card.BorderSizePixel = 0
+        card.ZIndex = 98
+        card.Parent = SG
+        rnd(card, UDim.new(0,20))
+        shadow(card, 32, 0.52, Color3.fromRGB(0,3,18))
+
+        -- border glow (accent coloured, pulses)
+        local cStr = stroke(card, ac, 1, 0.38)
+        TweenService:Create(cStr, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            {Transparency=0.82}):Play()
+
+        -- background gradient tinted to accent
+        do
+            local bg = Instance.new("Frame"); bg.Size = UDim2.new(1,0,1,0)
+            bg.BackgroundTransparency = 0.46; bg.BorderSizePixel = 0
+            bg.ZIndex = 98; bg.Parent = card; rnd(bg, UDim.new(0,20))
+            local r,g,b = ac.R*255, ac.G*255, ac.B*255
+            grad(bg, Color3.fromRGB(math.floor(r*0.14), math.floor(g*0.14), math.floor(b*0.14)),
+                     Color3.fromRGB(6,10,24), 148)
+        end
+
+        -- floating sparkle dots (exactly like greeting card)
+        local sparkDots = {"+", "·", "+", "·", "+"}
+        for i = 1, 5 do
+            local sp = Instance.new("TextLabel"); sp.Size = UDim2.new(0,12,0,12)
+            sp.Position = UDim2.new(math.random()*0.80+0.08, 0, math.random()*0.55+0.08, 0)
+            sp.BackgroundTransparency = 1; sp.Text = sparkDots[(i-1)%#sparkDots+1]
+            local h = Color3.toHSV(ac); sp.TextColor3 = Color3.fromHSV(h, 0.5, 1)
+            sp.TextSize = 7+math.random(0,4); sp.Font = Enum.Font.GothamBlack
+            sp.TextTransparency = 0.38; sp.ZIndex = 101; sp.Parent = card
+            TweenService:Create(sp, TweenInfo.new(1.6+math.random()*1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                {Position = UDim2.new(sp.Position.X.Scale,0, sp.Position.Y.Scale-0.06,0), TextTransparency=0.80}):Play()
+        end
+
+        -- ── Avatar ring (same as greeting card) ────────
+        local ring = Instance.new("Frame")
+        ring.Size = UDim2.new(0,56,0,56); ring.Position = UDim2.new(0,13,0.5,-28)
+        ring.BackgroundColor3 = ac; ring.BackgroundTransparency = 0.72
+        ring.BorderSizePixel = 0; ring.ZIndex = 100; ring.Parent = card; rnd(ring, UDim.new(1,0))
+        stroke(ring, ac, 2, 0.22)
+        TweenService:Create(ring, TweenInfo.new(2.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            {BackgroundColor3=Color3.new(1,1,1), BackgroundTransparency=0.46}):Play()
+
+        local aImg = Instance.new("ImageLabel")
+        aImg.Size = UDim2.new(0,48,0,48); aImg.Position = UDim2.new(0.5,-24,0.5,-24)
+        aImg.BackgroundColor3 = C.panelB; aImg.BackgroundTransparency = 0
+        aImg.Image = ICON.avatar; aImg.ImageColor3 = ac
+        aImg.ScaleType = Enum.ScaleType.Fit; aImg.ZIndex = 101; aImg.Parent = ring; rnd(aImg, UDim.new(1,0))
+
+        -- green online dot
+        local dot = Instance.new("Frame"); dot.Size = UDim2.new(0,11,0,11)
+        dot.Position = UDim2.new(1,-2,1,-2); dot.BackgroundColor3 = C.success
+        dot.BorderSizePixel = 0; dot.ZIndex = 102; dot.Parent = ring; rnd(dot, UDim.new(1,0))
+        stroke(dot, C.panel, 1.5, 0)
+        TweenService:Create(dot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            {BackgroundTransparency=0.38, Size=UDim2.new(0,12,0,12)}):Play()
+
+        -- ── Text area ──────────────────────────────────
+        local ta = Instance.new("Frame"); ta.Size = UDim2.new(1,-82,1,-10); ta.Position = UDim2.new(0,76,0,5)
+        ta.BackgroundTransparency = 1; ta.ZIndex = 100; ta.Parent = card
+
+        -- count badge pill
+        local pill = Instance.new("Frame"); pill.Size = UDim2.new(0,68,0,15); pill.Position = UDim2.new(0,0,0,4)
+        pill.BackgroundColor3 = ac; pill.BackgroundTransparency = 0.68
+        pill.BorderSizePixel = 0; pill.ZIndex = 101; pill.Parent = ta; rnd(pill, UDim.new(1,0))
+        stroke(pill, ac, 1, 0.34)
+        local pillLbl = mkLabel(pill, tostring(ms[1]).." items", 9, ac, Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+        pillLbl.Size = UDim2.new(1,0,1,0); pillLbl.ZIndex = 102; pillLbl.TextTransparency = 1
+
+        -- headline
+        local hdl = mkLabel(ta, ms[2], 15, Color3.new(1,1,1), Enum.Font.GothamBlack)
+        hdl.Size = UDim2.new(1,0,0,20); hdl.Position = UDim2.new(0,0,0,22); hdl.ZIndex = 101; hdl.TextTransparency = 1
+
+        -- subtext (player name + message)
+        local sub = mkLabel(ta, player.Name.." — "..ms[3], 10, C.textSec, Enum.Font.GothamSemibold)
+        sub.Size = UDim2.new(1,0,0,14); sub.Position = UDim2.new(0,0,0,44); sub.ZIndex = 101
+        sub.TextTransparency = 1; sub.TextTruncate = Enum.TextTruncate.AtEnd
+
+        -- "tap to close" hint
+        local hint = mkLabel(ta, "tap to close", 9, C.textMut, Enum.Font.Gotham)
+        hint.Size = UDim2.new(1,0,0,12); hint.Position = UDim2.new(0,0,0,62); hint.ZIndex = 101; hint.TextTransparency = 1
+
+        -- ── Animate IN: spring scale from 55% like greet card ──
+        tw(card, TW.spring, {
+            Size = UDim2.new(0,CW2,0,CH2),
+            Position = UDim2.new(0.5,-CW2/2,0,160),
+            BackgroundTransparency = 0
+        })
+        task.delay(0.18, function() tw(pillLbl, TW.fast, {TextTransparency=0}) end)
+        task.delay(0.28, function() tw(hdl,  TW.smooth, {TextTransparency=0}) end)
+        task.delay(0.36, function() tw(sub,  TW.smooth, {TextTransparency=0}) end)
+        task.delay(0.46, function() tw(hint, TW.smooth, {TextTransparency=0.55}) end)
+
+        -- burst particles from card centre
+        task.delay(0.20, function() burst(card, 14, ac) end)
+
+        -- hover tint
+        card.MouseEnter:Connect(function() tw(card, TW.fast, {BackgroundColor3=C.panelB}) end)
+        card.MouseLeave:Connect(function() tw(card, TW.fast, {BackgroundColor3=C.panel}) end)
+
+        -- ── Dismiss: squish to zero + fade, same as greet card ──
+        local dismissed = false
+        local function dismiss()
+            if dismissed then return end; dismissed = true
+            burst(card, 8, ac)
+            tw(card, TW.springS, {
+                Size = UDim2.new(0,0,0,0),
+                Position = UDim2.new(0.5,0,0,176),
+                BackgroundTransparency = 1
+            })
+            task.delay(0.38, function() card:Destroy() end)
+        end
+
+        card.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then dismiss() end
+        end)
+        task.delay(6.0, dismiss)
+    end)
+end
 
 -- ══════════════════════════════════════════════════════
 --  ACTIVITY LOG
@@ -327,6 +592,85 @@ local progFill
 local refreshLog, logAndRefresh
 local speedPresets, speedBtns, activeSpeedIdx, setSpeed
 local statsModal, statsVisible, openStats, closeStats
+
+-- ══════════════════════════════════════════════════════
+--  GREETING CARD
+-- ══════════════════════════════════════════════════════
+do
+    greetCard=Instance.new("Frame"); greetCard.Name="GreetCard"
+    greetCard.Size=UDim2.new(0,GW,0,GH); greetCard.Position=UDim2.new(0.5,-GW/2-212,0,44)
+    greetCard.BackgroundColor3=C.panel; greetCard.BackgroundTransparency=0; greetCard.BorderSizePixel=0; greetCard.ZIndex=10; greetCard.Parent=SG
+    rnd(greetCard,UDim.new(0,20)); shadow(greetCard,30,0.58,Color3.fromRGB(0,5,25))
+    local gStr=stroke(greetCard,C.accent,1,0.40); tw(gStr,TW.sine,{Color=C.accentBrt,Transparency=0.10}); trackTheme(gStr,"Color","accent")
+    do
+        local bg=Instance.new("Frame"); bg.Size=UDim2.new(1,0,1,0); bg.BackgroundTransparency=1; bg.BorderSizePixel=0; bg.ZIndex=10; bg.Parent=greetCard; rnd(bg,UDim.new(0,20))
+        grad(bg,Color3.fromRGB(9,17,48),Color3.fromRGB(4,8,20),148)
+    end
+    do -- sparkles
+        local em={"+","+",".","·","+"}
+        for i=1,5 do
+            local sp=Instance.new("TextLabel"); sp.Size=UDim2.new(0,14,0,14)
+            sp.Position=UDim2.new(math.random()*0.82+0.05,0,math.random()*0.58+0.05,0)
+            sp.BackgroundTransparency=1; sp.Text=em[(i-1)%#em+1]
+            sp.TextColor3=Color3.fromHSV(0.58+i*0.03,0.6,1); sp.TextSize=7+math.random(0,4)
+            sp.Font=Enum.Font.GothamBlack; sp.TextTransparency=0.32; sp.ZIndex=13; sp.Parent=greetCard
+            TweenService:Create(sp,TweenInfo.new(1.8+math.random()*1.4,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),
+                {Position=UDim2.new(sp.Position.X.Scale,0,sp.Position.Y.Scale-0.05-math.random()*0.04,0),TextTransparency=0.78}):Play()
+        end
+    end
+    local ring=Instance.new("Frame"); ring.Size=UDim2.new(0,54,0,54); ring.Position=UDim2.new(0,11,0.5,-27)
+    ring.BackgroundColor3=C.accent; ring.BackgroundTransparency=0.72; ring.BorderSizePixel=0; ring.ZIndex=12; ring.Parent=greetCard
+    rnd(ring,UDim.new(1,0)); stroke(ring,C.accent,2,0.22); tw(ring,TW.sine,{BackgroundColor3=C.accentBrt,BackgroundTransparency=0.48}); trackTheme(ring,"BackgroundColor3","accent")
+    local aImg=Instance.new("ImageLabel"); aImg.Size=UDim2.new(0,46,0,46); aImg.Position=UDim2.new(0.5,-23,0.5,-23)
+    aImg.BackgroundColor3=C.panelB; aImg.BackgroundTransparency=0; aImg.Image=ICON.avatar; aImg.ImageColor3=C.accent
+    aImg.ScaleType=Enum.ScaleType.Fit; aImg.ZIndex=13; aImg.Parent=ring; rnd(aImg,UDim.new(1,0))
+    greetingAvatar=aImg
+    do
+        local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,10,0,10); dot.Position=UDim2.new(1,-2,1,-2)
+        dot.BackgroundColor3=C.success; dot.BorderSizePixel=0; dot.ZIndex=14; dot.Parent=ring; rnd(dot,UDim.new(1,0))
+        stroke(dot,C.panel,1.5,0); tw(dot,TW.pulse,{BackgroundTransparency=0.32,Size=UDim2.new(0,11,0,11)})
+    end
+    local ta=Instance.new("Frame"); ta.Size=UDim2.new(1,-80,1,-10); ta.Position=UDim2.new(0,74,0,5)
+    ta.BackgroundTransparency=1; ta.ZIndex=12; ta.Parent=greetCard
+    local hiL=mkLabel(ta,"",14,C.accentBrt,Enum.Font.GothamBlack); hiL.Size=UDim2.new(1,0,0,21); hiL.Position=UDim2.new(0,0,0,5); hiL.ZIndex=13
+    local nmL=mkLabel(ta,"",12,C.textPri,Enum.Font.GothamBold); nmL.Size=UDim2.new(1,0,0,17); nmL.Position=UDim2.new(0,0,0,28); nmL.ZIndex=13
+    local sbL=mkLabel(ta,"",10,C.textMut,Enum.Font.GothamSemibold); sbL.Size=UDim2.new(1,0,0,14); sbL.Position=UDim2.new(0,0,0,48); sbL.ZIndex=13
+    local wH=mkLabel(greetCard,"",17,C.textPri,Enum.Font.GothamBlack,Enum.TextXAlignment.Right)
+    wH.Size=UDim2.new(0,24,0,24); wH.Position=UDim2.new(1,-30,0,5); wH.TextTransparency=1; wH.ZIndex=13
+    local function waveLoop()
+        tw(wH,TW.wave,{Rotation=18}); task.delay(0.48,function()
+        tw(wH,TW.wave,{Rotation=-8}); task.delay(0.48,function()
+        tw(wH,TW.wave,{Rotation=18}); task.delay(0.48,function()
+        tw(wH,TW.wave,{Rotation=0}); task.delay(3.2,waveLoop) end) end) end)
+    end
+    greetDismissed=true
+    greetCard.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 and not greetDismissed then
+            greetDismissed=true; burst(greetCard,8,C.accent)
+            tw(greetCard,TW.springS,{Size=UDim2.new(0,0,0,0),Position=UDim2.new(0.5,-GW/2-212,0,74),BackgroundTransparency=1})
+            task.delay(0.36,function() greetCard.Visible=false end)
+        end
+    end)
+    greetCard.MouseEnter:Connect(function() tw(greetCard,TW.fast,{BackgroundColor3=C.panelB}) end)
+    greetCard.MouseLeave:Connect(function() tw(greetCard,TW.fast,{BackgroundColor3=C.panel}) end)
+    -- entrance
+    local greetings={"Hey there! ","Hi, welcome!","What's up!","Let's farm! ⚡","Ready to go?"}
+    local sublines={"Energy Farm v12","Stay clean, farm fast","Good luck out there!","Let's get it!","You got this !"}
+    local gi=math.random(1,#greetings)
+    greetCard.BackgroundTransparency=1; greetCard.Size=UDim2.new(0,GW*0.6,0,GH*0.6); greetCard.Position=UDim2.new(0.5,-GW/2-212,0,58)
+    task.delay(0.52,function()
+        greetCard.Visible=true
+        tw(greetCard,TW.spring,{Size=UDim2.new(0,GW,0,GH),Position=UDim2.new(0.5,-GW/2-212,0,44),BackgroundTransparency=0})
+        task.delay(0.32,function()
+            tw(hiL,TW.fast,{TextTransparency=0}); typewrite(hiL,greetings[gi],0.04)
+            task.delay(0.5,function() tw(nmL,TW.fast,{TextTransparency=0}); typewrite(nmL,player.Name,0.05) end)
+            task.delay(1.0,function() tw(sbL,TW.fast,{TextTransparency=0}); typewrite(sbL,sublines[gi],0.038) end)
+            task.delay(1.4,function() tw(wH,TW.springS,{TextTransparency=0}); waveLoop() end)
+        end)
+        task.delay(0.28,function() burst(greetCard,10,C.accent) end)
+    end)
+    task.delay(1.4,function() tw(greetCard,TW.float,{Position=UDim2.new(0.5,-GW/2-212,0,38)}) end)
+end
 
 -- ══════════════════════════════════════════════════════
 --  CHECKLIST PANEL
