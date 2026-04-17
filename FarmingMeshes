@@ -98,30 +98,6 @@ do
     C.border=t.border; C.borderBrt=t.borderB
 end
 
--- ── Icons ──────────────────────────────────────────────
-local FB = {bolt="rbxassetid://6031071057",reset="rbxassetid://6031068486",clock="rbxassetid://6031068400",target="rbxassetid://6031068430",cog="rbxassetid://6031068416",logo="rbxassetid://6031068420",glow="rbxassetid://1281284834"}
-local iconFolder = RS:FindFirstChild("EF_Icons")
-local function getIcon(n)
-    if iconFolder then local d=iconFolder:FindFirstChild(n); if d and d:IsA("Decal") and d.Texture~="" then return d.Texture end end
-    return FB[n] or FB.logo
-end
-local ICON = {}
-for k in pairs(FB) do ICON[k]=getIcon(k) end
-ICON.avatar = ICON.logo
-
-local autoBtnAvatar  = nil
-local greetingAvatar = nil
-task.spawn(function()
-    local ok,url = pcall(function()
-        return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    end)
-    if ok and url and url~="" then
-        ICON.avatar = url
-        if autoBtnAvatar  then autoBtnAvatar.Image=url;  autoBtnAvatar.ImageColor3=Color3.new(1,1,1) end
-        if greetingAvatar then greetingAvatar.Image=url; greetingAvatar.ImageColor3=Color3.new(1,1,1) end
-    end
-end)
-
 -- ── Farm logic ─────────────────────────────────────────
 local cache, cacheTime = {}, 0
 local function rebuild()
