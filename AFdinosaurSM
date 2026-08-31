@@ -7,13 +7,13 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local TARGET_MODEL_NAME = "meteor"
-local SPEED_STUDS_PER_SEC = 55
+local SPEED_STUDS_PER_SEC = 80
 local WAIT_TIME_AT_TARGET = 5
+local UNDERGROUND_DEPTH = -25
 
 local activeESP = {}
 local isBusy = false
 
--- Weak key table so garbage collector cleans up deleted instances
 local visitedMeteors = setmetatable({}, {__mode = "k"})
 
 local autoTweenEnabled = false
@@ -174,22 +174,8 @@ local function triggerProximityPrompt(target)
     end
 end
 
-local function processMeteor(target)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local primaryPart = findPrimaryPart(target)
-    if not primaryPart then return end
-
-    isBusy = true
-
-    -- Updated offset: 12 studs right, 10 studs up
-    local targetCFrame = primaryPart.CFrame * CFrame.new(12, 10, 0)
-    local targetPosition = targetCFrame.Position
-
-    local distance = (hrp.Position - targetPosition).Magnitude
+local function executeSingleTween(hrp, targetCFrame)
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
     local travelTime = distance / SPEED_STUDS_PER_SEC
 
     local tweenInfo = TweenInfo.new(
@@ -213,14 +199,37 @@ local function processMeteor(target)
     end)
 
     while not completed and autoTweenEnabled do
-        task.wait(0.1)
+        task.wait(0.05)
     end
 
-    if not autoTweenEnabled then
-        stopCurrentTween()
-        return
-    end
+    return autoTweenEnabled
+end
 
+local function processMeteor(target)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local primaryPart = findPrimaryPart(target)
+    if not primaryPart then return end
+
+    isBusy = true
+
+    local finalCFrame = primaryPart.CFrame * CFrame.new(12, 10, 0)
+    local undergroundStart = hrp.CFrame * CFrame.new(0, UNDERGROUND_DEPTH, 0)
+    local undergroundTarget = finalCFrame * CFrame.new(0, UNDERGROUND_DEPTH - 10, 0)
+
+    -- Phase 1: Go Underground
+    if not executeSingleTween(hrp, undergroundStart) then return end
+
+    -- Phase 2: Move Underground to Target Location
+    if not executeSingleTween(hrp, undergroundTarget) then return end
+
+    -- Phase 3: Pop Up to Meteor Position
+    if not executeSingleTween(hrp, finalCFrame) then return end
+
+    -- Wait and Interact
     local waitTimer = 0
     while waitTimer < WAIT_TIME_AT_TARGET and autoTweenEnabled do
         triggerProximityPrompt(target)
@@ -228,7 +237,6 @@ local function processMeteor(target)
         waitTimer = waitTimer + 0.5
     end
 
-    -- Mark as visited only if completed while auto-tweening was enabled
     if autoTweenEnabled and target:IsDescendantOf(Workspace) then
         visitedMeteors[target] = true
     end
@@ -244,7 +252,6 @@ local function getNextMeteor()
     local closest = nil
     local shortestDistance = math.huge
 
-    -- Find the closest unvisited meteor
     for _, descendant in ipairs(Workspace:GetDescendants()) do
         if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) and not visitedMeteors[descendant] then
             local primaryPart = findPrimaryPart(descendant)
@@ -258,7 +265,6 @@ local function getNextMeteor()
         end
     end
 
-    -- If no unvisited meteors remain, clear visited list so skipped meteors are targetable again
     if not closest then
         table.clear(visitedMeteors)
         for _, descendant in ipairs(Workspace:GetDescendants()) do
