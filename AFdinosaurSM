@@ -12,10 +12,17 @@ local WAIT_TIME_AT_TARGET = 5
 
 local activeESP = {}
 local isBusy = false
-local visitedMeteors = {}
+
+local visitedMeteors = setmetatable({}, {__mode = "k"})
 
 local autoTweenEnabled = false
 local currentTween = nil
+local activeTweenConnection = nil
+
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("MeteorNotifierGui")
+if oldGui then
+    oldGui:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "MeteorNotifierGui"
@@ -57,6 +64,10 @@ local function updateNotification()
 end
 
 local function stopCurrentTween()
+    if activeTweenConnection then
+        activeTweenConnection:Disconnect()
+        activeTweenConnection = nil
+    end
     if currentTween then
         currentTween:Cancel()
         currentTween = nil
@@ -73,13 +84,10 @@ local function toggleAutoTween()
     end
 end
 
-notifyButton.MouseButton1Click:Connect(function()
-    toggleAutoTween()
-end)
+notifyButton.MouseButton1Click:Connect(toggleAutoTween)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-
     if input.KeyCode == Enum.KeyCode.E then
         toggleAutoTween()
     end
@@ -92,20 +100,23 @@ local function findPrimaryPart(instance)
     return instance:FindFirstChildWhichIsA("BasePart", true)
 end
 
+local function cleanupESP(target)
+    if activeESP[target] then
+        if activeESP[target].Connection then
+            activeESP[target].Connection:Disconnect()
+        end
+        if activeESP[target].Billboard then
+            activeESP[target].Billboard:Destroy()
+        end
+        activeESP[target] = nil
+    end
+end
+
 local function applyESP(target)
     if activeESP[target] then return end
 
     local primaryPart = findPrimaryPart(target)
     if not primaryPart then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "MeteorESP_Highlight"
-    highlight.Adornee = target
-    highlight.FillColor = Color3.fromRGB(255, 50, 50)
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.Parent = target
 
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "MeteorESP_Billboard"
@@ -129,11 +140,8 @@ local function applyESP(target)
 
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        if not target:IsDescendantOf(Workspace) then
-            highlight:Destroy()
-            billboard:Destroy()
-            connection:Disconnect()
-            activeESP[target] = nil
+        if not target or not target:IsDescendantOf(Workspace) then
+            cleanupESP(target)
             return
         end
 
@@ -144,7 +152,10 @@ local function applyESP(target)
         end
     end)
 
-    activeESP[target] = connection
+    activeESP[target] = {
+        Connection = connection,
+        Billboard = billboard
+    }
 end
 
 local function triggerProximityPrompt(target)
@@ -185,14 +196,18 @@ local function processMeteor(target)
         Enum.EasingDirection.Out
     )
 
+    stopCurrentTween()
+
     currentTween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
     currentTween:Play()
 
     local completed = false
-    local connection
-    connection = currentTween.Completed:Connect(function()
+    activeTweenConnection = currentTween.Completed:Connect(function()
         completed = true
-        if connection then connection:Disconnect() end
+        if activeTweenConnection then
+            activeTweenConnection:Disconnect()
+            activeTweenConnection = nil
+        end
     end)
 
     while not completed and autoTweenEnabled do
@@ -211,10 +226,8 @@ local function processMeteor(target)
         waitTimer = waitTimer + 0.5
     end
 
-    if autoTweenEnabled then
-        if target:IsDescendantOf(Workspace) then
-            visitedMeteors[target] = true
-        end
+    if autoTweenEnabled and target:IsDescendantOf(Workspace) then
+        visitedMeteors[target] = true
     end
 
     isBusy = false
