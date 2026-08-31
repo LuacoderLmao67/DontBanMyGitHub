@@ -2,16 +2,88 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
 local TARGET_MODEL_NAME = "meteor"
-local SPEED_STUDS_PER_SEC = 70
-local WAIT_TIME_AT_TARGET = 3
+local SPEED_STUDS_PER_SEC = 55
+local WAIT_TIME_AT_TARGET = 5
 
 local activeESP = {}
 local isBusy = false
 local visitedMeteors = {}
+
+local autoTweenEnabled = false
+local currentTween = nil
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MeteorNotifierGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local notifyButton = Instance.new("TextButton")
+notifyButton.Name = "NotifyButton"
+notifyButton.Size = UDim2.new(0, 200, 0, 50)
+notifyButton.Position = UDim2.new(0.5, -100, 0.15, 0)
+notifyButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+notifyButton.BackgroundTransparency = 0.2
+notifyButton.BorderSizePixel = 0
+notifyButton.TextColor3 = Color3.fromRGB(255, 70, 70)
+notifyButton.TextStrokeTransparency = 0.5
+notifyButton.Font = Enum.Font.SourceSansBold
+notifyButton.TextSize = 18
+notifyButton.Text = "Auto-Tween: OFF [E]"
+notifyButton.Active = true
+notifyButton.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = notifyButton
+
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Color = Color3.fromRGB(255, 255, 255)
+uiStroke.Thickness = 1.5
+uiStroke.Parent = notifyButton
+
+local function updateNotification()
+    if autoTweenEnabled then
+        notifyButton.Text = "Auto-Tween: ON [E]"
+        notifyButton.TextColor3 = Color3.fromRGB(85, 255, 127)
+    else
+        notifyButton.Text = "Auto-Tween: OFF [E]"
+        notifyButton.TextColor3 = Color3.fromRGB(255, 70, 70)
+    end
+end
+
+local function stopCurrentTween()
+    if currentTween then
+        currentTween:Cancel()
+        currentTween = nil
+    end
+    isBusy = false
+end
+
+local function toggleAutoTween()
+    autoTweenEnabled = not autoTweenEnabled
+    updateNotification()
+
+    if not autoTweenEnabled then
+        stopCurrentTween()
+    end
+end
+
+notifyButton.MouseButton1Click:Connect(function()
+    toggleAutoTween()
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.E then
+        toggleAutoTween()
+    end
+end)
 
 local function findPrimaryPart(instance)
     if instance:IsA("Model") and instance.PrimaryPart then
@@ -75,6 +147,21 @@ local function applyESP(target)
     activeESP[target] = connection
 end
 
+local function triggerProximityPrompt(target)
+    local prompt = target:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt then return end
+
+    if fireproximityprompt then
+        fireproximityprompt(prompt)
+    else
+        task.spawn(function()
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration > 0 and prompt.HoldDuration or 0.5)
+            prompt:InputHoldEnd()
+        end)
+    end
+end
+
 local function processMeteor(target)
     local char = LocalPlayer.Character
     if not char then return end
@@ -86,7 +173,10 @@ local function processMeteor(target)
 
     isBusy = true
 
-    local distance = (hrp.Position - primaryPart.Position).Magnitude
+    local targetCFrame = primaryPart.CFrame * CFrame.new(9, 10, 0)
+    local targetPosition = targetCFrame.Position
+
+    local distance = (hrp.Position - targetPosition).Magnitude
     local travelTime = distance / SPEED_STUDS_PER_SEC
 
     local tweenInfo = TweenInfo.new(
@@ -95,13 +185,38 @@ local function processMeteor(target)
         Enum.EasingDirection.Out
     )
 
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(primaryPart.Position)})
-    tween:Play()
-    tween.Completed:Wait()
+    currentTween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+    currentTween:Play()
 
-    task.wait(WAIT_TIME_AT_TARGET)
+    local completed = false
+    local connection
+    connection = currentTween.Completed:Connect(function()
+        completed = true
+        if connection then connection:Disconnect() end
+    end)
 
-    visitedMeteors[target] = true
+    while not completed and autoTweenEnabled do
+        task.wait(0.1)
+    end
+
+    if not autoTweenEnabled then
+        stopCurrentTween()
+        return
+    end
+
+    local waitTimer = 0
+    while waitTimer < WAIT_TIME_AT_TARGET and autoTweenEnabled do
+        triggerProximityPrompt(target)
+        task.wait(0.5)
+        waitTimer = waitTimer + 0.5
+    end
+
+    if autoTweenEnabled then
+        if target:IsDescendantOf(Workspace) then
+            visitedMeteors[target] = true
+        end
+    end
+
     isBusy = false
 end
 
@@ -109,6 +224,17 @@ local function getNextMeteor()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local hrp = char.HumanoidRootPart
+
+    local unvisitedCount = 0
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) and not visitedMeteors[descendant] then
+            unvisitedCount = unvisitedCount + 1
+        end
+    end
+
+    if unvisitedCount == 0 then
+        table.clear(visitedMeteors)
+    end
 
     local closest = nil
     local shortestDistance = math.huge
@@ -137,7 +263,7 @@ task.spawn(function()
             end
         end
 
-        if not isBusy then
+        if autoTweenEnabled and not isBusy then
             local nextTarget = getNextMeteor()
             if nextTarget then
                 processMeteor(nextTarget)
