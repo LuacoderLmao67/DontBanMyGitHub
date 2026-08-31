@@ -1,0 +1,149 @@
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local TARGET_MODEL_NAME = "meteor"
+local SPEED_STUDS_PER_SEC = 55
+local WAIT_TIME_AT_TARGET = 3
+
+local activeESP = {}
+local isBusy = false
+local visitedMeteors = {}
+
+local function findPrimaryPart(instance)
+    if instance:IsA("Model") and instance.PrimaryPart then
+        return instance.PrimaryPart
+    end
+    return instance:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function applyESP(target)
+    if activeESP[target] then return end
+
+    local primaryPart = findPrimaryPart(target)
+    if not primaryPart then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "MeteorESP_Highlight"
+    highlight.Adornee = target
+    highlight.FillColor = Color3.fromRGB(255, 50, 50)
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Parent = target
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "MeteorESP_Billboard"
+    billboard.Adornee = primaryPart
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextSize = 16
+    textLabel.Text = target.Name .. " [...]"
+    textLabel.Parent = billboard
+
+    billboard.Parent = target
+
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if not target:IsDescendantOf(Workspace) then
+            highlight:Destroy()
+            billboard:Destroy()
+            connection:Disconnect()
+            activeESP[target] = nil
+            return
+        end
+
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local dist = math.floor((char.HumanoidRootPart.Position - primaryPart.Position).Magnitude)
+            textLabel.Text = string.format("%s [%d studs]", target.Name, dist)
+        end
+    end)
+
+    activeESP[target] = connection
+end
+
+local function processMeteor(target)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local primaryPart = findPrimaryPart(target)
+    if not primaryPart then return end
+
+    isBusy = true
+
+    local distance = (hrp.Position - primaryPart.Position).Magnitude
+    local travelTime = distance / SPEED_STUDS_PER_SEC
+
+    local tweenInfo = TweenInfo.new(
+        travelTime,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out
+    )
+
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(primaryPart.Position)})
+    tween:Play()
+    tween.Completed:Wait()
+
+    task.wait(WAIT_TIME_AT_TARGET)
+
+    visitedMeteors[target] = true
+    isBusy = false
+end
+
+local function getNextMeteor()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local hrp = char.HumanoidRootPart
+
+    local closest = nil
+    local shortestDistance = math.huge
+
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) and not visitedMeteors[descendant] then
+            local primaryPart = findPrimaryPart(descendant)
+            if primaryPart then
+                local dist = (hrp.Position - primaryPart.Position).Magnitude
+                if dist < shortestDistance then
+                    shortestDistance = dist
+                    closest = descendant
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
+task.spawn(function()
+    while true do
+        for _, descendant in ipairs(Workspace:GetDescendants()) do
+            if string.lower(descendant.Name) == TARGET_MODEL_NAME then
+                applyESP(descendant)
+            end
+        end
+
+        if not isBusy then
+            local nextTarget = getNextMeteor()
+            if nextTarget then
+                processMeteor(nextTarget)
+            end
+        end
+
+        task.wait(0.5)
+    end
+end)
