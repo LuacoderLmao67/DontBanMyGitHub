@@ -13,6 +13,7 @@ local WAIT_TIME_AT_TARGET = 5
 local activeESP = {}
 local isBusy = false
 
+-- Weak key table so garbage collector cleans up deleted instances
 local visitedMeteors = setmetatable({}, {__mode = "k"})
 
 local autoTweenEnabled = false
@@ -184,7 +185,8 @@ local function processMeteor(target)
 
     isBusy = true
 
-    local targetCFrame = primaryPart.CFrame * CFrame.new(9, 10, 0)
+    -- Updated offset: 12 studs right, 10 studs up
+    local targetCFrame = primaryPart.CFrame * CFrame.new(12, 10, 0)
     local targetPosition = targetCFrame.Position
 
     local distance = (hrp.Position - targetPosition).Magnitude
@@ -226,6 +228,7 @@ local function processMeteor(target)
         waitTimer = waitTimer + 0.5
     end
 
+    -- Mark as visited only if completed while auto-tweening was enabled
     if autoTweenEnabled and target:IsDescendantOf(Workspace) then
         visitedMeteors[target] = true
     end
@@ -238,20 +241,10 @@ local function getNextMeteor()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local hrp = char.HumanoidRootPart
 
-    local unvisitedCount = 0
-    for _, descendant in ipairs(Workspace:GetDescendants()) do
-        if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) and not visitedMeteors[descendant] then
-            unvisitedCount = unvisitedCount + 1
-        end
-    end
-
-    if unvisitedCount == 0 then
-        table.clear(visitedMeteors)
-    end
-
     local closest = nil
     local shortestDistance = math.huge
 
+    -- Find the closest unvisited meteor
     for _, descendant in ipairs(Workspace:GetDescendants()) do
         if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) and not visitedMeteors[descendant] then
             local primaryPart = findPrimaryPart(descendant)
@@ -260,6 +253,23 @@ local function getNextMeteor()
                 if dist < shortestDistance then
                     shortestDistance = dist
                     closest = descendant
+                end
+            end
+        end
+    end
+
+    -- If no unvisited meteors remain, clear visited list so skipped meteors are targetable again
+    if not closest then
+        table.clear(visitedMeteors)
+        for _, descendant in ipairs(Workspace:GetDescendants()) do
+            if string.lower(descendant.Name) == TARGET_MODEL_NAME and descendant:IsDescendantOf(Workspace) then
+                local primaryPart = findPrimaryPart(descendant)
+                if primaryPart then
+                    local dist = (hrp.Position - primaryPart.Position).Magnitude
+                    if dist < shortestDistance then
+                        shortestDistance = dist
+                        closest = descendant
+                    end
                 end
             end
         end
